@@ -5,15 +5,16 @@ using namespace std;
 #include <cmath>
 #include <time.h>
 
-const int N_SLOY = 3, //число слоев = 3 + нулевой
+const int N_SLOY = 4, //число слоев = 3 + нулевой
   N_MAX = 30, //максимально возможное число нейронов в слое
+  N_MIN = 4, //минимально возможное число нейронов в слое
   N_PATTERN = 10, //число шаблонов
   KSO = 1; //Коэффициент скорости обучения
 const float CONST_ERROR = 0.01;
-const int STRUC_CONST[N_SLOY+1] = {30,30,25,4}; //чило нейронов в каждом слое
+const int STRUC_CONST[N_SLOY] = {30,30,25,4}; //чило нейронов в каждом слое
 
-int struc[N_SLOY+1] = {30,30,25,4};
-float w[N_SLOY+1][N_MAX][N_MAX]; //веса
+int struc[N_SLOY] = {N_MAX,30,25,N_MIN};
+float w[N_SLOY][N_MAX][N_MAX]; //веса
 /*
   w[k][2][3]
   k - номер слоя
@@ -22,9 +23,9 @@ float w[N_SLOY+1][N_MAX][N_MAX]; //веса
 */
 float pattern[N_PATTERN][N_MAX]; //совокупность шаблонов
 //pattern[1][2] - второй пиксел шаблона №1
-float target[N_PATTERN][4]; //целевой вектор
-float outArr[N_SLOY+1][N_MAX]; //Выходные значения нейронов в каждом слое
-float delta[N_SLOY+1][N_MAX];   //сигналы ошибки
+float target[N_PATTERN][N_MIN]; //целевой вектор
+float outs[N_SLOY][N_MAX]; //Выходные значения нейронов в каждом слое
+float delta[N_SLOY][N_MAX];   //сигналы ошибки
 float dw; //поправка для веса;
 float error;  //ошибка;
 
@@ -39,24 +40,24 @@ float error1; //ошибка-критерий остановки обучени�
 
 void forwardPass()
 {
-  for (k = 1; k <= N_SLOY; k++)
+  for (k = 1; k < N_SLOY; k++)
     for (i = 0; i < struc[k]; i++) {
-      outArr[k][i] = 0;
+      outs[k][i] = 0;
       for (j = 0; j < struc[k - 1]; j++)
-        outArr[k][i] = outArr[k][i] + outArr[k-1][j] * w[k][j][i];
-      outArr[k][i] = 1/(1+exp(-outArr[k][i]));
+        outs[k][i] = outs[k][i] + outs[k-1][j] * w[k][j][i];
+      outs[k][i] = 1/(1+exp(-outs[k][i]));
     }
 }
 
 float calcErr(int m)
 {
   for (i = 0; i < struc[0]; i++) {
-    outArr[0][i] = pattern[m][i];
+    outs[0][i] = pattern[m][i];
   }
   forwardPass();
   float err = 0;
-  for (i = 0; i < struc[N_SLOY]; i++) {
-    err += pow(target[m][i] - outArr[N_SLOY][i], 2);
+  for (i = 0; i < struc[N_SLOY - 1]; i++) {
+    err += pow(target[m][i] - outs[N_SLOY - 1][i], 2);
   }
   return sqrt(err/struc[N_SLOY]);
 }
@@ -76,21 +77,21 @@ void backPropagation(void)
   m = 0;
   do {
     for (i = 0; i < struc[0]; i++) {
-      outArr[0][i] = pattern[m][i];
+      outs[0][i] = pattern[m][i];
     }
     forwardPass();
-    for (k = N_SLOY; k >= 1; k--)
+    for (k = N_SLOY - 1; k >= 1; k--)
       for (i = 0; i < struc[k]; i++) {
-        if (k == N_SLOY)
-          error = target[m][i] - outArr[k][i];
+        if (k == N_SLOY - 1)
+          error = target[m][i] - outs[k][i];
         else {
           error = 0;
           for (c = 0; c < struc[k + 1]; c++)
             error += delta[k + 1][c] * w[k + 1][i][c];
         }
-        delta[k][i] = outArr[k][i] * (1 - outArr[k][i]) * error;
+        delta[k][i] = outs[k][i] * (1 - outs[k][i]) * error;
         for (j = 0; j < struc[k - 1]; j++) {
-          dw = KSO * delta[k][i] * outArr[k - 1][j];
+          dw = KSO * delta[k][i] * outs[k - 1][j];
           w[k][j][i] += dw;
         }    
       }
@@ -107,7 +108,7 @@ void init(void)
 {
   // Начальная инициализация весов
   srand(time(NULL));
-  for (k = 1; k <= N_SLOY; k++)
+  for (k = 1; k < N_SLOY; k++)
     for (j = 0; j < struc[k - 1]; j++)
       for (i = 0; i < struc[k]; i++)
         w[k][j][i] = -1 + 2 * (float)rand()/RAND_MAX;
@@ -134,14 +135,19 @@ void loadPatterns(void)
   else {
     while (!f.eof()) {
       f >> m; //считывание номера шаблона
+      cout << m << endl;
       // считываем входной шаблон
-      for (i = 0; i < struc[0]; i++) {
+      for (i = 0; i < N_MAX; i++) {
         f >> pattern[m][i];
+        cout << pattern[m][i] << ' ';        
       }
+      cout << "\n";
       // считываем цель
-      for (i = 0; i < struc[N_SLOY]; i++) {
+      for (i = 0; i < N_MIN; i++) {
         f >> target[m][i];
+        cout << target[m][i] << ' ';
       }
+      cout << "\n\n";
     }
     f.close();
     cout << "Patterns are loaded!" << endl;
@@ -152,9 +158,20 @@ void viewPattern(void)
 {
   cout << "Type pattern num: ";
   cin >> m;  cout << "Pattern #" << m << ": " << endl;
-  writeArr(pattern[m], struc[0]);
+  writeArr(pattern[m], N_MAX);
   cout << "Target #" << m << ": " << endl;
-  writeArr(target[m], struc[N_SLOY]);  
+  writeArr(target[m], N_MIN); 
+
+  for (i = 0; i < N_MAX; i++) {
+    outs[0][i] = pattern[m][i];
+  }
+
+  forwardPass();
+  
+  cout << "Output: " << endl;
+  writeArr(outs[N_SLOY - 1], N_MIN);
+
+  cout << "Err: " << calcErr(m) << endl;  
 }
 
 void calcOut(void)
@@ -172,26 +189,22 @@ void calcOut(void)
     while (!f.eof()) {
       f >> m; //считывание номера шаблона
       // считываем входное изображение
-      for (i = 0; i < struc[0]; i++) {
-        f >> outArr[0][i];
+      for (i = 0; i < N_MAX; i++) {
+        f >> outs[0][i];
       }
-      // считываем цель
-      //for (i = 0; i < struc[N_SLOY]; i++) {
-      //  f >> target[m][i];
-      //}
     }
     f.close();   
   }
   
   cout << "Input: " << endl;
-  writeArr(outArr[0], struc[0]);
+  writeArr(outs[0], N_MAX);
   cout << "Target #" << m << ": " << endl;
-  writeArr(target[m], struc[N_SLOY]);
+  writeArr(target[m], N_MIN);
   
   forwardPass();
   
   cout << "Output: " << endl;
-  writeArr(outArr[N_SLOY], struc[N_SLOY]);
+  writeArr(outs[N_SLOY - 1], N_MIN);
 
   cout << "Err: " << calcErr(m) << endl;
 }
@@ -199,17 +212,18 @@ void calcOut(void)
 int main(void)
 {
   init(); //инициализация весов
+
+  loadPatterns(); //Загрузка шаблонов
   
   char ch; //код команды
   do {
     cout << "\nMenu:" << endl;
     cout << "1: Load patterns" << endl;
-    cout << "2: Calc out" << endl;
-    cout << "3: Educate" << endl;
-    cout << "4: Set structure" << endl;
-    cout << "5: Calc sum Err" << endl;
-    cout << "6: View pattern" << endl;
-    cout << "7: Exit" << endl;
+    cout << "2: Calc pattern" << endl;
+    cout << "3: Calc input" << endl;
+    cout << "4: Educate" << endl;
+    cout << "5: Set structure" << endl;
+    cout << "6: Exit" << endl;
     cout << "\n   Select menu item: ";
     cin >> ch;
     
@@ -218,24 +232,21 @@ int main(void)
       loadPatterns();
       break;
     case '2':
-      calcOut();
+      viewPattern();;
       break;
     case '3':
-      backPropagation();
+      calcOut();
       break;
     case '4':
+      backPropagation();
+      break;
+    case '5':
       struc[1] = 30;
       struc[2] = 25;
       cout << "Sum err: " << calcSumErr() << endl;      
       break;
-    case '5':
-      cout << "Sum err: " << calcSumErr() << endl;
-      break;    
-    case '6':
-      viewPattern();
-      break;    
     }
-  } while (ch != '7');
+  } while (ch != '6');
   
   //system("pause");
   
