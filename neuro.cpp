@@ -5,16 +5,15 @@ using namespace std;
 #include <cmath>
 #include <time.h>
 
-const int N_SLOY = 4, //число слоев = 3 + нулевой
+const int N_SLOY = 3, //число слоев = 3 + нулевой
   N_MAX = 30, //максимально возможное число нейронов в слое
   N_MIN = 4, //минимально возможное число нейронов в слое
   N_PATTERN = 10, //число шаблонов
   KSO = 1; //Коэффициент скорости обучения
 const float CONST_ERROR = 0.01;
-const int STRUC_CONST[N_SLOY] = {30,30,25,4}; //чило нейронов в каждом слое
 
-int struc[N_SLOY] = {N_MAX,30,25,N_MIN};
-float w[N_SLOY][N_MAX][N_MAX]; //веса
+int struc[N_SLOY + 1] = {N_MAX,30,25,N_MIN};
+float w[N_SLOY + 1][N_MAX][N_MAX]; //веса
 /*
   w[k][2][3]
   k - номер слоя
@@ -24,8 +23,8 @@ float w[N_SLOY][N_MAX][N_MAX]; //веса
 float pattern[N_PATTERN][N_MAX]; //совокупность шаблонов
 //pattern[1][2] - второй пиксел шаблона №1
 float target[N_PATTERN][N_MIN]; //целевой вектор
-float outs[N_SLOY][N_MAX]; //Выходные значения нейронов в каждом слое
-float delta[N_SLOY][N_MAX];   //сигналы ошибки
+float outs[N_SLOY + 1][N_MAX]; //Выходные значения нейронов в каждом слое
+float delta[N_SLOY + 1][N_MAX];   //сигналы ошибки
 float dw; //поправка для веса;
 float error;  //ошибка;
 
@@ -40,7 +39,7 @@ float error1; //ошибка-критерий остановки обучени�
 
 void forwardPass()
 {
-  for (k = 1; k < N_SLOY; k++)
+  for (k = 1; k <= N_SLOY; k++)
     for (i = 0; i < struc[k]; i++) {
       outs[k][i] = 0;
       for (j = 0; j < struc[k - 1]; j++)
@@ -51,22 +50,24 @@ void forwardPass()
 
 float calcErr(int m)
 {
-  for (i = 0; i < struc[0]; i++) {
-    outs[0][i] = pattern[m][i];
-  }
-  forwardPass();
   float err = 0;
-  for (i = 0; i < struc[N_SLOY - 1]; i++) {
-    err += pow(target[m][i] - outs[N_SLOY - 1][i], 2);
+  for (i = 0; i < N_MIN; i++) {
+    err += pow(target[m][i] - outs[N_SLOY][i], 2);
   }
-  return sqrt(err/struc[N_SLOY]);
+  return sqrt(err/N_MIN);
 }
 
 float calcSumErr(void)
 {
   float err = 0;
-  for (int m = 0; m < N_PATTERN; m++) {
-    err += pow(calcErr(m), 2);
+  for (c = 0; c < N_PATTERN; c++) {
+    for (i = 0; i < struc[0]; i++) {
+      outs[0][i] = pattern[c][i];
+    }
+    
+    forwardPass();
+
+    err += pow(calcErr(c), 2);
   }
   return sqrt(err/N_PATTERN);
 }
@@ -80,9 +81,9 @@ void backPropagation(void)
       outs[0][i] = pattern[m][i];
     }
     forwardPass();
-    for (k = N_SLOY - 1; k >= 1; k--)
+    for (k = N_SLOY; k >= 1; k--)
       for (i = 0; i < struc[k]; i++) {
-        if (k == N_SLOY - 1)
+        if (k == N_SLOY)
           error = target[m][i] - outs[k][i];
         else {
           error = 0;
@@ -108,7 +109,7 @@ void init(void)
 {
   // Начальная инициализация весов
   srand(time(NULL));
-  for (k = 1; k < N_SLOY; k++)
+  for (k = 1; k <= N_SLOY; k++)
     for (j = 0; j < struc[k - 1]; j++)
       for (i = 0; i < struc[k]; i++)
         w[k][j][i] = -1 + 2 * (float)rand()/RAND_MAX;
@@ -169,7 +170,7 @@ void viewPattern(void)
   forwardPass();
   
   cout << "Output: " << endl;
-  writeArr(outs[N_SLOY - 1], N_MIN);
+  writeArr(outs[N_SLOY], N_MIN);
 
   cout << "Err: " << calcErr(m) << endl;  
 }
@@ -204,10 +205,18 @@ void calcOut(void)
   forwardPass();
   
   cout << "Output: " << endl;
-  writeArr(outs[N_SLOY - 1], N_MIN);
+  writeArr(outs[N_SLOY], N_MIN);
 
   cout << "Err: " << calcErr(m) << endl;
 }
+
+void setStruc(void)
+{
+  cout << "Enter N1 (30) and N2 (25): " << "\n";
+  cin >> struc[1] >> struc[2];
+  cout << "Sum err: " << calcSumErr() << endl;  
+}
+
 
 int main(void)
 {
@@ -232,7 +241,7 @@ int main(void)
       loadPatterns();
       break;
     case '2':
-      viewPattern();;
+      viewPattern();
       break;
     case '3':
       calcOut();
@@ -241,9 +250,7 @@ int main(void)
       backPropagation();
       break;
     case '5':
-      struc[1] = 30;
-      struc[2] = 25;
-      cout << "Sum err: " << calcSumErr() << endl;      
+      setStruc();
       break;
     }
   } while (ch != '6');
