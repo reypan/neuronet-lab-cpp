@@ -5,28 +5,28 @@ using namespace std;
 #include <cmath>
 #include <ctime>
 
-const int N_SLOY = 3, //число слоев = 3 + нулевой
+const int N_SL = 3, //число слоев = 3 + нулевой
   N_MAX = 30, //максимально возможное число нейронов в слое
   N_MIN = 4, //минимально возможное число нейронов в слое
-  N_PATTERN = 10, //число шаблонов
-  KSO = 1; //Коэффициент скорости обучения
-const float CONST_ERROR = 0.01;
+  N_SH = 10, //число шаблонов
+  KSO = 1, //Коэффициент скорости обучения
+  N_I = 20000; // максимальное количество итераций в цикле обучения
+const float E_P = 0.01;
 
-int struc[N_SLOY + 1] = {N_MAX,30,25,N_MIN};
-float w[N_SLOY + 1][N_MAX][N_MAX]; //веса
+int struc[N_SL + 1] = {N_MAX,30,25,N_MIN};
+float w[N_SL + 1][N_MAX][N_MAX]; //веса
 /*
   w[k][2][3]
   k - номер слоя
   2 - номер нейрона в (k-1) слое
   3 - номер нейрона в k-ом слое}
 */
-float pattern[N_PATTERN][N_MAX]; //совокупность шаблонов
+float pattern[N_SH][N_MAX]; //совокупность шаблонов
 //pattern[1][2] - второй пиксел шаблона №1
-float target[N_PATTERN][N_MIN]; //целевой вектор
-float outs[N_SLOY + 1][N_MAX]; //Выходные значения нейронов в каждом слое
-float delta[N_SLOY + 1][N_MAX];   //сигналы ошибки
-float dw; //поправка для веса;
-float error;  //ошибка;
+float target[N_SH][N_MIN]; //целевой вектор
+float outs[N_SL + 1][N_MAX]; //Выходные значения нейронов в каждом слое
+float delta[N_SL + 1][N_MAX];   //сигналы ошибки
+float eps;  // Эпсилон;
 
 int c, //вспомогательный счетчик
   m, //номер шаблона
@@ -35,31 +35,34 @@ int c, //вспомогательный счетчик
   i, //номер нейрона в текущем слое
   count_error; //счетчик итераций при обучении
 
+// Проход вперед
 void neuroCalc()
 {
-  for (k = 1; k <= N_SLOY; k++)
+  for (k = 1; k <= N_SL; k++)
     for (i = 0; i < struc[k]; i++) {
       outs[k][i] = 0;
       for (j = 0; j < struc[k - 1]; j++)
-        outs[k][i] = outs[k][i] + outs[k-1][j] * w[k][j][i];
+        outs[k][i] += outs[k-1][j] * w[k][j][i];
       outs[k][i] = 1/(1+exp(-outs[k][i]));
     }
 }
 
+// Расчет ошибки для шаблона m
 float calcErr(int m)
 {
   float err = 0;
   for (i = 0; i < N_MIN; i++) {
-    err += pow(target[m][i] - outs[N_SLOY][i], 2);
+    err += pow(target[m][i] - outs[N_SL][i], 2);
   }
   return sqrt(err/N_MIN);
 }
 
+// Расчет суммарной ошибки
 float calcSumErr(void)
 {
   float err = 0;
-  for (c = 0; c < N_PATTERN; c++) {
-    for (i = 0; i < struc[0]; i++) {
+  for (c = 0; c < N_SH; c++) {
+    for (i = 0; i < N_MAX; i++) {
       outs[0][i] = pattern[c][i];
     }
     
@@ -67,52 +70,56 @@ float calcSumErr(void)
 
     err += pow(calcErr(c), 2);
   }
-  return sqrt(err/N_PATTERN);
+  return sqrt(err/N_SH);
 }
 
+// Проход назад
 void goBack(void)
 {
-  for (k = N_SLOY; k >= 1; k--)
+  for (k = N_SL; k >= 1; k--)
     for (i = 0; i < struc[k]; i++) {
-      if (k == N_SLOY)
-        error = target[m][i] - outs[k][i];
+      if (k == N_SL)
+        eps = target[m][i] - outs[k][i];
       else {
-        error = 0;
+        eps = 0;
         for (c = 0; c < struc[k + 1]; c++)
-          error += delta[k + 1][c] * w[k + 1][i][c];
+          eps += delta[k + 1][c] * w[k + 1][i][c];
       }
-      delta[k][i] = outs[k][i] * (1 - outs[k][i]) * error;
+      delta[k][i] = outs[k][i] * (1 - outs[k][i]) * eps;
       for (j = 0; j < struc[k - 1]; j++) {
-        dw = KSO * delta[k][i] * outs[k - 1][j];
-        w[k][j][i] += dw;
+        w[k][j][i] += KSO * delta[k][i] * outs[k - 1][j];
       }    
     }
 }
 
+// Обучение
 void educate(void)
 {
   count_error = 0;
   m = 0;
   do {
-    for (i = 0; i < struc[0]; i++) {
+    // Заполнение нулевого слоя очередным шаблоном
+    for (i = 0; i < N_MAX; i++) {
       outs[0][i] = pattern[m][i];
     }
-    neuroCalc();
-    goBack();
-    if (m == N_PATTERN - 1) m = 0;
+    neuroCalc();                // Вычисление выхода нейросети
+    goBack();                   // Проход назад
+    // Выбираем очередную обучающую пару
+    if (m == N_SH - 1) m = 0;
     else m++;
     count_error++;
   }
-  while ((count_error < 20000) and (calcSumErr() > CONST_ERROR));
+  while ((count_error < N_I) and (calcSumErr() > E_P));
   cout << "Education is completed for " << count_error << " iterations." << endl ;
-  //Education is completed for 2 iterations  
+  // Education is completed for 2 iterations
 }
 
+// Процедура инициализации
 void init(void)
 {
   // Начальная инициализация весов
   srand(time(NULL));
-  for (k = 1; k <= N_SLOY; k++)
+  for (k = 1; k <= N_SL; k++)
     for (j = 0; j < struc[k - 1]; j++)
       for (i = 0; i < struc[k]; i++)
         w[k][j][i] = -1 + 2 * (float)rand()/RAND_MAX;
@@ -141,11 +148,12 @@ void printNeuronet(void)
   //Вывод выходного вектора
   cout << "Output: " << endl;
   for (i = 0; i < N_MIN; i++) {
-    cout << outs[N_SLOY][i] << ' ';
+    cout << outs[N_SL][i] << ' ';
   }
   cout << "\n\n";  
 }
 
+// Процедура загрузки шаблонов из файла
 void loadPatterns(void)
 {
   cout << "Loading patterns..." << endl;
@@ -179,27 +187,10 @@ void loadPatterns(void)
   }  
 }
 
-void calcPattern(void)
+// Загрузка изображения из файла
+void loadInput()
 {
-  cout << "Calc pattern" << endl;
-
-  cout << "Type pattern num: ";
-  cin >> m;
-
-  for (i = 0; i < N_MAX; i++) {
-    outs[0][i] = pattern[m][i];
-  }
-
-  neuroCalc();
-  
-  printNeuronet();
-  
-  cout << "Err: " << calcErr(m) << endl;  
-}
-
-void calcInput(void)
-{
-  cout << "Calc input.txt" << endl;
+  cout << "Load <input.txt>..." << endl;
 
   // считываем входное изображение
   ifstream f;
@@ -217,13 +208,29 @@ void calcInput(void)
       }
     }
     f.close();   
+  }  
+}
+
+void calcOutput()
+{
+  cout << "Calc output..." << endl;
+  cout << "Enter pattern number from 0 to 9 or 10 for load input.txt: " << endl;
+
+  cout << "Type pattern num: ";
+  cin >> m;
+
+  if (m >= 0 && m <= 9) {
+    // Заполнение нулевого слоя шаблоном m
+    for (i = 0; i < N_MAX; i++) 
+      outs[0][i] = pattern[m][i];
   }
-  
+  else loadInput();               // Загрузка из файла
+
   neuroCalc();
   
   printNeuronet();
   
-  cout << "Err: " << calcErr(m) << endl;
+  cout << "Err: " << calcErr(m) << endl;  
 }
 
 void setStruc(void)
@@ -244,11 +251,10 @@ int main(void)
   do {
     cout << "\nMenu:" << endl;
     cout << "1: Load patterns" << endl;
-    cout << "2: Calc pattern" << endl;
-    cout << "3: Calc input" << endl;
-    cout << "4: Educate" << endl;
-    cout << "5: Set structure" << endl;
-    cout << "6: Exit" << endl;
+    cout << "2: Calc output" << endl;
+    cout << "3: Educate" << endl;
+    cout << "4: Set structure" << endl;
+    cout << "5: Exit" << endl;
     cout << "\n   Select menu item: ";
     cin >> ch;
     
@@ -257,19 +263,16 @@ int main(void)
       loadPatterns();
       break;
     case '2':
-      calcPattern();;
+      calcOutput();
       break;
     case '3':
-      calcInput();
-      break;
-    case '4':
       educate();
       break;
-    case '5':
+    case '4':
       setStruc();
       break;
     }
-  } while (ch != '6');
+  } while (ch != '5');
   
   //system("pause");
   
