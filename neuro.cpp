@@ -3,7 +3,7 @@ using namespace std;
 #include <iostream>
 #include <fstream>
 #include <cmath>
-#include <time.h>
+#include <ctime>
 
 const int N_SLOY = 3, //число слоев = 3 + нулевой
   N_MAX = 30, //максимально возможное число нейронов в слое
@@ -35,9 +35,7 @@ int c, //вспомогательный счетчик
   i, //номер нейрона в текущем слое
   count_error; //счетчик итераций при обучении
 
-float error1; //ошибка-критерий остановки обучения
-
-void forwardPass()
+void neuroCalc()
 {
   for (k = 1; k <= N_SLOY; k++)
     for (i = 0; i < struc[k]; i++) {
@@ -65,14 +63,33 @@ float calcSumErr(void)
       outs[0][i] = pattern[c][i];
     }
     
-    forwardPass();
+    neuroCalc();
 
     err += pow(calcErr(c), 2);
   }
   return sqrt(err/N_PATTERN);
 }
 
-void backPropagation(void)
+void goBack(void)
+{
+  for (k = N_SLOY; k >= 1; k--)
+    for (i = 0; i < struc[k]; i++) {
+      if (k == N_SLOY)
+        error = target[m][i] - outs[k][i];
+      else {
+        error = 0;
+        for (c = 0; c < struc[k + 1]; c++)
+          error += delta[k + 1][c] * w[k + 1][i][c];
+      }
+      delta[k][i] = outs[k][i] * (1 - outs[k][i]) * error;
+      for (j = 0; j < struc[k - 1]; j++) {
+        dw = KSO * delta[k][i] * outs[k - 1][j];
+        w[k][j][i] += dw;
+      }    
+    }
+}
+
+void educate(void)
 {
   count_error = 0;
   m = 0;
@@ -80,29 +97,15 @@ void backPropagation(void)
     for (i = 0; i < struc[0]; i++) {
       outs[0][i] = pattern[m][i];
     }
-    forwardPass();
-    for (k = N_SLOY; k >= 1; k--)
-      for (i = 0; i < struc[k]; i++) {
-        if (k == N_SLOY)
-          error = target[m][i] - outs[k][i];
-        else {
-          error = 0;
-          for (c = 0; c < struc[k + 1]; c++)
-            error += delta[k + 1][c] * w[k + 1][i][c];
-        }
-        delta[k][i] = outs[k][i] * (1 - outs[k][i]) * error;
-        for (j = 0; j < struc[k - 1]; j++) {
-          dw = KSO * delta[k][i] * outs[k - 1][j];
-          w[k][j][i] += dw;
-        }    
-      }
+    neuroCalc();
+    goBack();
     if (m == N_PATTERN - 1) m = 0;
     else m++;
     count_error++;
   }
   while ((count_error < 20000) and (calcSumErr() > CONST_ERROR));
   cout << "Education is completed for " << count_error << " iterations." << endl ;
-	//Education is completed for 2 iterations
+  //Education is completed for 2 iterations  
 }
 
 void init(void)
@@ -115,13 +118,32 @@ void init(void)
         w[k][j][i] = -1 + 2 * (float)rand()/RAND_MAX;
 }
 
-void writeArr(float *arr, int size, int car = 5)
+//Вывод на экран нейросети
+void printNeuronet(void)
 {
-  for (i = 0; i < size; i++) {
-    cout << arr[i] << ' ';
-    if ((i + 1) % car == 0) cout << '\n'; 
+  //Вывод входного изображения
+  cout << "\n";
+  cout << "Input: " << endl;
+  for (i = 0; i < N_MAX; i++) {
+    if (outs[0][i] == 1) cout << char(219);
+    else cout << char(176);
+    if ((i + 1) % 5 == 0) cout << '\n'; 
   }
-  cout << '\n';
+  cout << "\n";
+
+  //Вывод целевого вектора
+  cout << "Target: " << endl;
+  for (i = 0; i < N_MIN; i++) {
+    cout << target[m][i] << ' ';
+  }
+  cout << "\n\n";
+
+  //Вывод выходного вектора
+  cout << "Output: " << endl;
+  for (i = 0; i < N_MIN; i++) {
+    cout << outs[N_SLOY][i] << ' ';
+  }
+  cout << "\n\n";  
 }
 
 void loadPatterns(void)
@@ -136,14 +158,16 @@ void loadPatterns(void)
   else {
     while (!f.eof()) {
       f >> m; //считывание номера шаблона
-      cout << m << endl;
+      cout << "m = " <<  m << endl;
       // считываем входной шаблон
+      cout << "Pattern: ";
       for (i = 0; i < N_MAX; i++) {
         f >> pattern[m][i];
         cout << pattern[m][i] << ' ';        
       }
       cout << "\n";
       // считываем цель
+      cout << "Target: ";
       for (i = 0; i < N_MIN; i++) {
         f >> target[m][i];
         cout << target[m][i] << ' ';
@@ -155,29 +179,27 @@ void loadPatterns(void)
   }  
 }
 
-void viewPattern(void)
+void calcPattern(void)
 {
+  cout << "Calc pattern" << endl;
+
   cout << "Type pattern num: ";
-  cin >> m;  cout << "Pattern #" << m << ": " << endl;
-  writeArr(pattern[m], N_MAX);
-  cout << "Target #" << m << ": " << endl;
-  writeArr(target[m], N_MIN); 
+  cin >> m;
 
   for (i = 0; i < N_MAX; i++) {
     outs[0][i] = pattern[m][i];
   }
 
-  forwardPass();
+  neuroCalc();
   
-  cout << "Output: " << endl;
-  writeArr(outs[N_SLOY], N_MIN);
-
+  printNeuronet();
+  
   cout << "Err: " << calcErr(m) << endl;  
 }
 
-void calcOut(void)
+void calcInput(void)
 {
-  cout << "Calc output..." << endl;
+  cout << "Calc input.txt" << endl;
 
   // считываем входное изображение
   ifstream f;
@@ -197,16 +219,10 @@ void calcOut(void)
     f.close();   
   }
   
-  cout << "Input: " << endl;
-  writeArr(outs[0], N_MAX);
-  cout << "Target #" << m << ": " << endl;
-  writeArr(target[m], N_MIN);
+  neuroCalc();
   
-  forwardPass();
+  printNeuronet();
   
-  cout << "Output: " << endl;
-  writeArr(outs[N_SLOY], N_MIN);
-
   cout << "Err: " << calcErr(m) << endl;
 }
 
@@ -241,13 +257,13 @@ int main(void)
       loadPatterns();
       break;
     case '2':
-      viewPattern();
+      calcPattern();;
       break;
     case '3':
-      calcOut();
+      calcInput();
       break;
     case '4':
-      backPropagation();
+      educate();
       break;
     case '5':
       setStruc();
