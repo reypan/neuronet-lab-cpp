@@ -10,13 +10,13 @@ using namespace std;
 
 const int N_LAYER = 3, //число слоев = 3 + нулевой
     N_MAX = 30, //максимально возможное число нейронов в слое
-    N_MIN = 4, //минимально возможное число нейронов в слое
+    N_MIN = 10, //минимально возможное число нейронов в слое
     N_PAT = 10, //число шаблонов (patterns)
     LR = 1,   //Коэффициент скорости обучения (leaning rate)
     N_I = 15000; // максимальное количество итераций в цикле обучения
 const float ERR_MAX = 0.01; // пороговая ошибка обучения
 
-int struc[N_LAYER + 1] = {N_MAX, 30, 25, N_MIN}; // структура сети
+int struc[N_LAYER + 1] = {N_MAX, 30, 20, N_MIN}; // структура сети
 float w[N_LAYER + 1][N_MAX][N_MAX];              //веса
 /*
   w[k][2][3]
@@ -165,6 +165,41 @@ void init(void) {
 }
 
 
+// Converts a vector of values to a probability distribution.
+// The elements of the output vector are in range [0, 1] and sum to 1.
+// The probability of each vector x is computed as `x / sum(x)`
+// В Keras есть спец. функция `softmax`
+void calcProbability(void) {
+  float sum = 0; // для расчёта суммы
+  float prob = 0; // значение вероятности (нормированное значение)
+
+  float maxIndex = 0; // индекс максимального элемента массива
+  float maxValue = 0; // максимальное значение в массиве
+
+  // Расчёт суммы sum(exp(x))
+  for (i = 0; i < N_MIN; i++) {
+//    sum += exp(outs[N_LAYER][i]);
+    sum += outs[N_LAYER][i];
+  }
+
+  cout << "Probability:" << endl;
+  for (i = 0; i < N_MIN; i++) {
+    //prob = exp(outs[N_LAYER][i]) / sum;
+    prob = outs[N_LAYER][i] / sum;
+    cout << setprecision(2) << prob * 100 << "  ";
+
+    if (maxValue < prob) {
+      maxValue = prob;
+      maxIndex = i;
+    }
+  }
+
+  cout << "\n";
+
+  cout << "Prediction label: " << maxIndex << endl;
+}
+
+
 // Вывод на экран нейросети: вход, цель, выход, ошибка
 // Вызывается после процедуры neuroCalc()
 void printNeuronet(void) {
@@ -198,6 +233,9 @@ void printNeuronet(void) {
 
   //Вывод ошибки
   cout << "Err: " << setprecision(4) << calcErr(m) << endl;
+  cout << "\n";
+
+  calcProbability();
   cout << "\n\n";
 }
 
@@ -214,18 +252,13 @@ void loadPatterns(void) {
     while (!f.eof()) {
       f >> m; //считывание номера шаблона
       cout << "m = " << m << endl;
+      // Задаём целевой вектор - 1 в номере шаблона
+      target[m][m] = 1;
       // считываем входной шаблон
       cout << "Pattern: ";
       for (i = 0; i < N_MAX; i++) {
         f >> pattern[m][i];
         cout << pattern[m][i] << ' ';
-      }
-      cout << "\n";
-      // считываем цель
-      cout << "Target: ";
-      for (i = 0; i < N_MIN; i++) {
-        f >> target[m][i];
-        cout << target[m][i] << ' ';
       }
       cout << "\n\n";
     }
@@ -237,7 +270,7 @@ void loadPatterns(void) {
 
 // Загрузка изображения из файла
 void loadInput() {
-  cout << "Load <input.txt>..." << endl;
+  cout << "Load <input.txt>...\n" << endl;
 
   // считываем входное изображение
   ifstream f;
@@ -246,8 +279,8 @@ void loadInput() {
   if (!f) {
     cout << "Can't open input.txt";
   } else {
-    f >> m; //считывание номера шаблона
-    cout << "m = " << m << endl;
+    f >> m; //считывание истинного номера шаблона
+    cout << "True label: " << m << endl;
     // считываем входное изображение
     for (i = 0; i < N_MAX; i++)
       f >> outs[0][i];
