@@ -12,7 +12,7 @@ const int N_LAYER = 3, //число слоев = 3 + нулевой
     N_MAX = 30, //максимально возможное число нейронов в слое
     N_MIN = 10, //минимально возможное число нейронов в слое
     N_PAT = 10, //число шаблонов (patterns)
-    LR = 1,   //Коэффициент скорости обучения (leaning rate)
+    LR = 1,     //Коэффициент скорости обучения (leaning rate)
     N_I = 15000; // максимальное количество итераций в цикле обучения
 const float ERR_MAX = 0.01; // пороговая ошибка обучения
 
@@ -25,11 +25,12 @@ float w[N_LAYER + 1][N_MAX][N_MAX];              //веса
   3 - номер нейрона в k-ом слое}
 */
 float pattern[N_PAT][N_MAX]; //совокупность шаблонов
-// pattern[1][2] - второй пиксел шаблона №1
+// pattern[1][2] - второй пиксел шаблона № 1
 float target[N_PAT][N_MIN]; //целевой вектор
-float outs[N_LAYER + 1][N_MAX]; //Выходные значения нейронов в каждом слое
+float x[N_LAYER + 1][N_MAX]; //массив сигналов в нейросети
+
 float delta[N_LAYER + 1][N_MAX]; //сигналы ошибки дельта
-float eps;                    // Эпсилон
+float eps;                    // Эпсилон для обучения
 
 int c, //вспомогательный счетчик
     m, //номер шаблона
@@ -37,7 +38,7 @@ int c, //вспомогательный счетчик
     j, //номер нейрона в предыдущем слое
     i; //номер нейрона в текущем слое
 
-bool exitFlag;
+bool exitFlag; // Флаг выхода из программы
 
 
 #define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||"
@@ -54,14 +55,14 @@ void printProgress(double percentage) {
 
 // Проход вперед
 void neuroCalc() {
-  float net;
+  float s;
   for (k = 1; k <= N_LAYER; k++) {
     for (i = 0; i < struc[k]; i++) {
-      net = 0;
+      s = 0;
       for (j = 0; j < struc[k - 1]; j++) {
-        net += outs[k - 1][j] * w[k][j][i];
+        s += x[k - 1][j] * w[k][j][i];
       }
-      outs[k][i] = 1 / (1 + exp(-net));
+      x[k][i] = 1 / (1 + exp(-s));
     }
   }
 }
@@ -72,7 +73,7 @@ float calcErr(int m) {
   // Вспомогательная лок. переменная для подсчёта суммы
   float sum = 0;
   for (i = 0; i < N_MIN; i++) {
-    sum += pow(target[m][i] - outs[N_LAYER][i], 2);
+    sum += pow(target[m][i] - x[N_LAYER][i], 2);
   }
   return sqrt(sum / N_MIN);
 }
@@ -83,7 +84,7 @@ float calcSumErr(void) {
   float sum = 0;
   for (c = 0; c < N_PAT; c++) {
     for (i = 0; i < N_MAX; i++) {
-      outs[0][i] = pattern[c][i];
+      x[0][i] = pattern[c][i];
     }
 
     neuroCalc();
@@ -99,7 +100,7 @@ void goBack(void) {
   for (k = N_LAYER; k >= 1; k--) {
     for (i = 0; i < struc[k]; i++) {
       if (k == N_LAYER) {
-        eps = target[m][i] - outs[k][i];
+        eps = target[m][i] - x[k][i];
       }
       else {
         eps = 0;
@@ -107,9 +108,9 @@ void goBack(void) {
           eps += delta[k + 1][c] * w[k + 1][i][c];
         }
       }
-      delta[k][i] = outs[k][i] * (1 - outs[k][i]) * eps;
+      delta[k][i] = x[k][i] * (1 - x[k][i]) * eps;
       for (j = 0; j < struc[k - 1]; j++) {
-        w[k][j][i] += LR * delta[k][i] * outs[k - 1][j];
+        w[k][j][i] += LR * delta[k][i] * x[k - 1][j];
       }
     }
   }
@@ -117,29 +118,31 @@ void goBack(void) {
 
 
 // Обучение
-void educate(void) {
-  cout << "Education..." << endl;
+void learn(void) {
+  cout << "Learning..." << endl;
 
   int count = 0; // Счётчик итераций
-  m = 0;  // Счётчик шаблонов (глобальный)
   float sum = 0;   // Сумма для подсчёта ошибки
-  float sigma = 1; // Ошибка по всем шаблонам (ср. квадратическое откл.)
+  float err = 1; // Ошибка по всем шаблонам (ср. квадратическое откл.)
+
+  m = 0;  // Счётчик шаблонов (глобальный)
 
   do {
     // Заполнение нулевого слоя очередным шаблоном
     for (i = 0; i < N_MAX; i++) {
-      outs[0][i] = pattern[m][i];
+      x[0][i] = pattern[m][i];
     }
     neuroCalc(); // Вычисление выхода нейросети
-    sum += pow(calcErr(m), 2);
+    sum += pow(calcErr(m), 2); // Сумма для расчёта ошибки по всему множеству
     goBack(); // Проход назад
     // Выбираем очередную обучающую пару
     if (m == N_PAT - 1) {
-      sigma = sqrt(sum / N_PAT);
+      err = sqrt(sum / N_PAT);
       m = 0;
       sum = 0;
-    } else
+    } else {
       m++;
+    }
     count++;
 
     // Вывод прогресс-бара каждый сотый шаг
@@ -147,10 +150,10 @@ void educate(void) {
       printProgress((float)count / N_I);
     }
 
-  } while (sigma > ERR_MAX && count < N_I);
+  } while (err > ERR_MAX && count < N_I);
 
   cout << "\n";
-  cout << "Education is completed for " << count << " iterations." << endl;
+  cout << "Learning is completed for " << count << " iterations." << endl;
 }
 
 
@@ -178,14 +181,14 @@ void calcProbability(void) {
 
   // Расчёт суммы sum(exp(x))
   for (i = 0; i < N_MIN; i++) {
-//    sum += exp(outs[N_LAYER][i]);
-    sum += outs[N_LAYER][i];
+//    sum += exp(x[N_LAYER][i]);
+    sum += x[N_LAYER][i];
   }
 
   cout << "Probability:" << endl;
   for (i = 0; i < N_MIN; i++) {
-    //prob = exp(outs[N_LAYER][i]) / sum;
-    prob = outs[N_LAYER][i] / sum;
+    //prob = exp(x[N_LAYER][i]) / sum;
+    prob = x[N_LAYER][i] / sum;
     cout << setprecision(2) << prob * 100 << "  ";
 
     if (maxValue < prob) {
@@ -207,7 +210,7 @@ void printNeuronet(void) {
   cout << "\n";
   cout << "Input: " << endl;
   for (i = 0; i < N_MAX; i++) {
-    if (outs[0][i] == 1)
+    if (x[0][i] == 1)
       cout << '#';
     else
       cout << '.';
@@ -227,7 +230,7 @@ void printNeuronet(void) {
   //Вывод выходного вектора
   cout << "Output: " << endl;
   for (i = 0; i < N_MIN; i++) {
-    cout << setprecision(2) << outs[N_LAYER][i] << "  ";
+    cout << setprecision(2) << x[N_LAYER][i] << "  ";
   }
   cout << "\n\n";
 
@@ -268,27 +271,6 @@ void loadPatterns(void) {
 }
 
 
-// Загрузка изображения из файла
-void loadInput() {
-  cout << "Load <input.txt>...\n" << endl;
-
-  // считываем входное изображение
-  ifstream f;
-  f.clear();
-  f.open("input.txt");
-  if (!f) {
-    cout << "Can't open input.txt";
-  } else {
-    f >> m; //считывание истинного номера шаблона
-    cout << "True label: " << m << endl;
-    // считываем входное изображение
-    for (i = 0; i < N_MAX; i++)
-      f >> outs[0][i];
-    f.close();
-  }
-}
-
-
 // Расчёт шаблона
 void calcPattern() {
   cout << "Calc pattern..." << endl;
@@ -296,8 +278,9 @@ void calcPattern() {
   cin >> m;
 
   // Заполнение нулевого слоя шаблоном m
-  for (i = 0; i < N_MAX; i++)
-    outs[0][i] = pattern[m][i];
+  for (i = 0; i < N_MAX; i++) {
+    x[0][i] = pattern[m][i];
+  }
 
   neuroCalc();
 
@@ -309,7 +292,21 @@ void calcPattern() {
 void calcInput() {
   cout << "Calc input..." << endl;
 
-  loadInput();
+  // считываем входное изображение
+  ifstream f;
+  f.clear();
+  f.open("input.txt");
+  if (!f) {
+    cout << "Can't open input.txt";
+  } else {
+    f >> m; //считывание истинного номера шаблона
+    cout << "True label: " << m << endl;
+    // считываем входное изображение
+    for (i = 0; i < N_MAX; i++) {
+      f >> x[0][i];
+    }
+    f.close();
+  }
 
   neuroCalc();
 
@@ -329,16 +326,16 @@ void setStruc(void) {
 
 // Обработчик выхода из программы
 void exitProgram(void) {
-  char ch = 'n';
+  char ans = 'n';
 
   do {
     cout << "Exit anyway? (y or n)" << endl;
-    cin >> ch;
+    cin >> ans;
   }
-  while (ch != 'y' && ch != 'n');
+  while (ans != 'y' && ans != 'n');
 
-  if (ch == 'y') exitFlag = true;
-  if (ch == 'n') exitFlag = false;
+  if (ans == 'y') exitFlag = true;
+  if (ans == 'n') exitFlag = false;
 }
 
 
@@ -372,7 +369,7 @@ int main(void) {
       calcPattern();
       break;
     case '3':
-      educate();
+      learn();
       break;
     case '4':
       calcInput();
