@@ -8,16 +8,19 @@ using namespace std;
 #include <iomanip>
 #include <iostream>
 
-const int N_LAYER = 3, //число слоев = 3 + нулевой
-    N_MAX = 30, //максимально возможное число нейронов в слое
-    N_MIN = 10, //минимально возможное число нейронов в слое
-    N_PAT = 10, //число шаблонов (patterns)
-    LR = 1,     //Коэффициент скорости обучения (leaning rate)
-    N_I = 15000; // максимальное количество итераций в цикле обучения
-const float ERR_MAX = 0.01; // пороговая ошибка обучения
+// Константы
+const int N_LAYER = 3; //число слоев = 3 + нулевой
+const int N_MAX = 30; //максимально возможное число нейронов в слое
+const int N_MIN = 10; //минимально возможное число нейронов в слое
+const int N_PAT = 10; //число шаблонов (patterns)
 
+const int N_I = 15000; //максимальное количество итераций в цикле обучения
+const float ALPHA = 1.0;      //Коэффициент скорости обучения (leaning rate)
+const float ERR_MAX = 0.01; //Пороговая ошибка обучения
+ 
+// Переменные
 int struc[N_LAYER + 1] = {N_MAX, 30, 20, N_MIN}; // структура сети
-float w[N_LAYER + 1][N_MAX][N_MAX];              //веса
+float w[N_LAYER + 1][N_MAX][N_MAX]; //веса
 /*
   w[k][2][3]
   k - номер слоя
@@ -27,16 +30,16 @@ float w[N_LAYER + 1][N_MAX][N_MAX];              //веса
 float pattern[N_PAT][N_MAX]; //совокупность шаблонов
 // pattern[1][2] - второй пиксел шаблона № 1
 float target[N_PAT][N_MIN]; //целевой вектор
-float x[N_LAYER + 1][N_MAX]; //массив сигналов в нейросети
+float y[N_LAYER + 1][N_MAX]; //массив сигналов в нейросети
 
 float delta[N_LAYER + 1][N_MAX]; //сигналы ошибки дельта
 float eps;                    // Эпсилон для обучения
 
-int c, //вспомогательный счетчик
-    m, //номер шаблона
-    k, //номер слоя
-    j, //номер нейрона в предыдущем слое
-    i; //номер нейрона в текущем слое
+int i; //номер нейрона в текущем слое
+int j; //номер нейрона в предыдущем слое
+int k; //номер слоя
+int m; //номер шаблона
+int c; //вспомогательный счетчик
 
 bool exitFlag; // Флаг выхода из программы
 
@@ -56,24 +59,24 @@ void printProgress(double percentage) {
 // Проход вперед
 void neuroCalc() {
   float s;
-  for (k = 1; k <= N_LAYER; k++) {
+  for (k = 1; k < N_LAYER + 1; k++) {
     for (i = 0; i < struc[k]; i++) {
       s = 0;
       for (j = 0; j < struc[k - 1]; j++) {
-        s += x[k - 1][j] * w[k][j][i];
+        s += y[k - 1][j] * w[k][j][i];
       }
-      x[k][i] = 1 / (1 + exp(-s));
+      y[k][i] = 1 / (1 + exp(-s));
     }
   }
 }
 
 
-// Расчет ошибки для шаблона m
-float calcErr(int m) {
+// Расчет ошибки для шаблона № p
+float calcErr(int p) {
   // Вспомогательная лок. переменная для подсчёта суммы
   float sum = 0;
   for (i = 0; i < N_MIN; i++) {
-    sum += pow(target[m][i] - x[N_LAYER][i], 2);
+    sum += pow(target[p][i] - y[N_LAYER][i], 2);
   }
   return sqrt(sum / N_MIN);
 }
@@ -84,11 +87,9 @@ float calcSumErr(void) {
   float sum = 0;
   for (c = 0; c < N_PAT; c++) {
     for (i = 0; i < N_MAX; i++) {
-      x[0][i] = pattern[c][i];
+      y[0][i] = pattern[c][i];
     }
-
     neuroCalc();
-
     sum += pow(calcErr(c), 2);
   }
   return sqrt(sum / N_PAT);
@@ -97,10 +98,10 @@ float calcSumErr(void) {
 
 // Проход назад
 void goBack(void) {
-  for (k = N_LAYER; k >= 1; k--) {
+  for (k = N_LAYER; k > 0; k--) {
     for (i = 0; i < struc[k]; i++) {
       if (k == N_LAYER) {
-        eps = target[m][i] - x[k][i];
+        eps = target[m][i] - y[k][i];
       }
       else {
         eps = 0;
@@ -108,9 +109,9 @@ void goBack(void) {
           eps += delta[k + 1][c] * w[k + 1][i][c];
         }
       }
-      delta[k][i] = x[k][i] * (1 - x[k][i]) * eps;
+      delta[k][i] = y[k][i] * (1 - y[k][i]) * eps;
       for (j = 0; j < struc[k - 1]; j++) {
-        w[k][j][i] += LR * delta[k][i] * x[k - 1][j];
+        w[k][j][i] += ALPHA * delta[k][i] * y[k - 1][j];
       }
     }
   }
@@ -130,18 +131,18 @@ void learn(void) {
   do {
     // Заполнение нулевого слоя очередным шаблоном
     for (i = 0; i < N_MAX; i++) {
-      x[0][i] = pattern[m][i];
+      y[0][i] = pattern[m][i];
     }
     neuroCalc(); // Вычисление выхода нейросети
     sum += pow(calcErr(m), 2); // Сумма для расчёта ошибки по всему множеству
     goBack(); // Проход назад
     // Выбираем очередную обучающую пару
-    if (m == N_PAT - 1) {
+    if (m < N_PAT-1) {
+      m++;
+    } else {
       err = sqrt(sum / N_PAT);
       m = 0;
       sum = 0;
-    } else {
-      m++;
     }
     count++;
 
@@ -161,7 +162,7 @@ void learn(void) {
 void init(void) {
   // Начальная инициализация весов
   srand(time(NULL));
-  for (k = 1; k <= N_LAYER; k++)
+  for (k = 1; k < N_LAYER + 1; k++)
     for (j = 0; j < struc[k - 1]; j++)
       for (i = 0; i < struc[k]; i++)
         w[k][j][i] = -1 + 2 * (float)rand() / RAND_MAX;
@@ -181,14 +182,14 @@ void calcProbability(void) {
 
   // Расчёт суммы sum(exp(x))
   for (i = 0; i < N_MIN; i++) {
-//    sum += exp(x[N_LAYER][i]);
-    sum += x[N_LAYER][i];
+//    sum += exp(y[N_LAYER][i]);
+    sum += y[N_LAYER][i];
   }
 
   cout << "Probability:" << endl;
   for (i = 0; i < N_MIN; i++) {
-    //prob = exp(x[N_LAYER][i]) / sum;
-    prob = x[N_LAYER][i] / sum;
+    //prob = exp(y[N_LAYER][i]) / sum;
+    prob = y[N_LAYER][i] / sum;
     cout << setprecision(2) << prob * 100 << "  ";
 
     if (maxValue < prob) {
@@ -210,7 +211,7 @@ void printNeuronet(void) {
   cout << "\n";
   cout << "Input: " << endl;
   for (i = 0; i < N_MAX; i++) {
-    if (x[0][i] == 1)
+    if (y[0][i] == 1)
       cout << '#';
     else
       cout << '.';
@@ -230,7 +231,7 @@ void printNeuronet(void) {
   //Вывод выходного вектора
   cout << "Output: " << endl;
   for (i = 0; i < N_MIN; i++) {
-    cout << setprecision(2) << x[N_LAYER][i] << "  ";
+    cout << setprecision(2) << y[N_LAYER][i] << "  ";
   }
   cout << "\n\n";
 
@@ -279,7 +280,7 @@ void calcPattern() {
 
   // Заполнение нулевого слоя шаблоном m
   for (i = 0; i < N_MAX; i++) {
-    x[0][i] = pattern[m][i];
+    y[0][i] = pattern[m][i];
   }
 
   neuroCalc();
@@ -303,7 +304,7 @@ void calcInput() {
     cout << "True label: " << m << endl;
     // считываем входное изображение
     for (i = 0; i < N_MAX; i++) {
-      f >> x[0][i];
+      f >> y[0][i];
     }
     f.close();
   }
