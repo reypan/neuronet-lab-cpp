@@ -358,7 +358,7 @@ int main(void) {
     cout << "4: Calc input" << endl;
     cout << "5: Set structure" << endl;
     cout << "6: Exit" << endl;
-    cout << "\n   Select menu item: ";
+    cout << "\nSelect menu item: ";
     cin >> ch;
     cout << endl;
 
