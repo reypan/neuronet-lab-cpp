@@ -19,7 +19,7 @@ const float ALPHA = 1.0;      //Коэффициент скорости обуч
 const float ERR_MAX = 0.01; //Пороговая ошибка обучения
  
 // Переменные
-int struc[N_LAYER + 1] = {N_MAX, 30, 20, N_MIN}; // структура сети
+int struc[N_LAYER + 1] = {N_MAX, 25, 20, N_MIN}; // структура сети
 float w[N_LAYER + 1][N_MAX][N_MAX]; //веса
 /*
   w[k][2][3]
@@ -318,7 +318,7 @@ void calcInput() {
 // Изменение структуры нейросети
 void setStruc(void) {
   cout << "Set structure..." << endl;
-  cout << "Enter N1 (30) and N2 (25): "
+  cout << "Enter N1 (25) and N2 (20): "
        << "\n";
   cin >> struc[1] >> struc[2];
   cout << "Sum err: " << calcSumErr() << endl;
